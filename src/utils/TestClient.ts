@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js'
 import { EXAMPLE_TOOLS, EXAMPLE_HANDLERS } from '../tools/example.js'
+import { WEBGL_3D_TOOLS, WEBGL_3D_HANDLERS } from '../tools/webgl3d.js'
 
 export type ToolResult = {
     toolResult: {
@@ -12,8 +13,8 @@ export class TestClient {
     private handlers: Record<string, Function>
 
     constructor() {
-        this.tools = EXAMPLE_TOOLS
-        this.handlers = EXAMPLE_HANDLERS
+        this.tools = [...EXAMPLE_TOOLS, ...WEBGL_3D_TOOLS]
+        this.handlers = { ...EXAMPLE_HANDLERS, ...WEBGL_3D_HANDLERS }
     }
 
     async listTools(): Promise<Tool[]> {

@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { log } from './utils/helpers.js'
 import { EXAMPLE_TOOLS, EXAMPLE_HANDLERS } from './tools/example.js'
+import { WEBGL_3D_TOOLS, WEBGL_3D_HANDLERS } from './tools/webgl3d.js'
 import { version } from './utils/version.js'
 
 // Handle process events
@@ -18,8 +19,8 @@ process.on('unhandledRejection', (error) => {
 })
 
 // Combine all tools
-const ALL_TOOLS = [...EXAMPLE_TOOLS]
-const ALL_HANDLERS = { ...EXAMPLE_HANDLERS }
+const ALL_TOOLS = [...EXAMPLE_TOOLS, ...WEBGL_3D_TOOLS]
+const ALL_HANDLERS = { ...EXAMPLE_HANDLERS, ...WEBGL_3D_HANDLERS }
 
 // Create server
 const server = new Server(

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Graph Visualization - AI-XR-MCP</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    #graph-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+    }
+    .info-panel {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 15px;
+      border-radius: 4px;
+      font-size: 14px;
+      max-width: 300px;
+    }
+    .controls {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 4px;
+    }
+  </style>
+  <script src="https://unpkg.com/three"></script>
+  <script src="https://unpkg.com/three-spritetext"></script>
+  <script src="https://unpkg.com/3d-force-graph"></script>
+</head>
+<body>
+  <div id="graph-container"></div>
+  <div class="info-panel">
+    <h3>AI-XR-MCP Repository Visualization</h3>
+    <p>
+      <b>Rotate:</b> Left-click + drag<br>
+      <b>Pan:</b> Right-click + drag<br>
+      <b>Zoom:</b> Scroll / pinch<br>
+      <b>Node info:</b> Click on node
+    </p>
+    <div id="node-info"></div>
+  </div>
+  <div class="controls">
+    <button id="toggle-layout">Toggle Layout</button>
+    <button id="toggle-labels">Toggle Labels</button>
+    <button id="center-graph">Center View</button>
+  </div>
+
+  <script>
+    const getGraph = async () => {
+      try {
+        const currentDirectory = window.location.pathname.split('/').slice(0, -2).join('/');
+        
+        // Sample data structure for the repository
+        const graphData = {
+          nodes: [
+            { id: 'root', name: 'AI-XR-MCP', val: 7, group: 'repo', color: '#61DAFB' },
+            { id: 'src', name: 'src', val: 3, group: 'directory', color: '#4CAF50', path: '/src' },
+            { id: 'configs', name: 'configs', val: 3, group: 'directory', color: '#4CAF50', path: '/configs' },
+            { id: 'shortcuts', name: 'shortcuts', val: 3, group: 'directory', color: '#4CAF50', path: '/shortcuts' },
+            { id: 'src/tools', name: 'tools', val: 3, group: 'directory', color: '#4CAF50', path: '/src/tools' },
+            { id: 'src/utils', name: 'utils', val: 3, group: 'directory', color: '#4CAF50', path: '/src/utils' },
+            
+            // Files in root
+            { id: 'README.md', name: 'README.md', val: 1, group: 'document', color: '#D2B4DE', path: '/README.md' },
+            { id: 'CLAUDE.md', name: 'CLAUDE.md', val: 1, group: 'document', color: '#D2B4DE', path: '/CLAUDE.md' },
+            { id: 'package.json', name: 'package.json', val: 1, group: 'data', color: '#F1948A', path: '/package.json' },
+            { id: 'package-lock.json', name: 'package-lock.json', val: 1, group: 'data', color: '#F1948A', path: '/package-lock.json' },
+            { id: 'tsconfig.json', name: 'tsconfig.json', val: 1, group: 'data', color: '#F1948A', path: '/tsconfig.json' },
+            { id: 'vitest.config.ts', name: 'vitest.config.ts', val: 1, group: 'script', color: '#F9E79F', path: '/vitest.config.ts' },
+            
+            // Files in src
+            { id: 'src/index.ts', name: 'index.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/index.ts' },
+            
+            // Files in src/tools
+            { id: 'src/tools/example.ts', name: 'example.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/tools/example.ts' },
+            { id: 'src/tools/example.test.ts', name: 'example.test.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/tools/example.test.ts' },
+            { id: 'src/tools/webgl3d.ts', name: 'webgl3d.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/tools/webgl3d.ts' },
+            { id: 'src/tools/webgl3d.test.ts', name: 'webgl3d.test.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/tools/webgl3d.test.ts' },
+            
+            // Files in src/utils
+            { id: 'src/utils/TestClient.ts', name: 'TestClient.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/utils/TestClient.ts' },
+            { id: 'src/utils/helpers.ts', name: 'helpers.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/utils/helpers.ts' },
+            { id: 'src/utils/types.ts', name: 'types.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/utils/types.ts' },
+            { id: 'src/utils/version.ts', name: 'version.ts', val: 1, group: 'script', color: '#F9E79F', path: '/src/utils/version.ts' },
+            
+            // Files in configs
+            { id: 'configs/README.md', name: 'README.md', val: 1, group: 'document', color: '#D2B4DE', path: '/configs/README.md' },
+            { id: 'configs/claude-desktop.json', name: 'claude-desktop.json', val: 1, group: 'data', color: '#F1948A', path: '/configs/claude-desktop.json' },
+            { id: 'configs/cursor.json', name: 'cursor.json', val: 1, group: 'data', color: '#F1948A', path: '/configs/cursor.json' },
+            { id: 'configs/windsurf.json', name: 'windsurf.json', val: 1, group: 'data', color: '#F1948A', path: '/configs/windsurf.json' },
+            { id: 'configs/windsurf_mcp_config.json', name: 'windsurf_mcp_config.json', val: 1, group: 'data', color: '#F1948A', path: '/configs/windsurf_mcp_config.json' },
+            
+            // Files in shortcuts
+            { id: 'shortcuts/README.md', name: 'README.md', val: 1, group: 'document', color: '#D2B4DE', path: '/shortcuts/README.md' },
+            { id: 'shortcuts/shortcuts.json', name: 'shortcuts.json', val: 1, group: 'data', color: '#F1948A', path: '/shortcuts/shortcuts.json' },
+            { id: 'shortcuts/webgl3d.json', name: 'webgl3d.json', val: 1, group: 'data', color: '#F1948A', path: '/shortcuts/webgl3d.json' }
+          ],
+          links: [
+            // Root to directories
+            { source: 'root', target: 'src', value: 1 },
+            { source: 'root', target: 'configs', value: 1 },
+            { source: 'root', target: 'shortcuts', value: 1 },
+            
+            // Root to files
+            { source: 'root', target: 'README.md', value: 1 },
+            { source: 'root', target: 'CLAUDE.md', value: 1 },
+            { source: 'root', target: 'package.json', value: 1 },
+            { source: 'root', target: 'package-lock.json', value: 1 },
+            { source: 'root', target: 'tsconfig.json', value: 1 },
+            { source: 'root', target: 'vitest.config.ts', value: 1 },
+            
+            // src to subdirectories
+            { source: 'src', target: 'src/tools', value: 1 },
+            { source: 'src', target: 'src/utils', value: 1 },
+            
+            // src to files
+            { source: 'src', target: 'src/index.ts', value: 1 },
+            
+            // src/tools to files
+            { source: 'src/tools', target: 'src/tools/example.ts', value: 1 },
+            { source: 'src/tools', target: 'src/tools/example.test.ts', value: 1 },
+            { source: 'src/tools', target: 'src/tools/webgl3d.ts', value: 1 },
+            { source: 'src/tools', target: 'src/tools/webgl3d.test.ts', value: 1 },
+            
+            // src/utils to files
+            { source: 'src/utils', target: 'src/utils/TestClient.ts', value: 1 },
+            { source: 'src/utils', target: 'src/utils/helpers.ts', value: 1 },
+            { source: 'src/utils', target: 'src/utils/types.ts', value: 1 },
+            { source: 'src/utils', target: 'src/utils/version.ts', value: 1 },
+            
+            // configs to files
+            { source: 'configs', target: 'configs/README.md', value: 1 },
+            { source: 'configs', target: 'configs/claude-desktop.json', value: 1 },
+            { source: 'configs', target: 'configs/cursor.json', value: 1 },
+            { source: 'configs', target: 'configs/windsurf.json', value: 1 },
+            { source: 'configs', target: 'configs/windsurf_mcp_config.json', value: 1 },
+            
+            // shortcuts to files
+            { source: 'shortcuts', target: 'shortcuts/README.md', value: 1 },
+            { source: 'shortcuts', target: 'shortcuts/shortcuts.json', value: 1 },
+            { source: 'shortcuts', target: 'shortcuts/webgl3d.json', value: 1 }
+          ]
+        };
+        
+        return graphData;
+      } catch (error) {
+        console.error('Error loading graph data:', error);
+        return { nodes: [], links: [] };
+      }
+    };
+    
+    // Setup visualization
+    let showLabels = true;
+    let currentLayout = 'force';
+    
+    // Initialize 3D force graph when data is loaded
+    getGraph().then(graphData => {
+      const Graph = ForceGraph3D()
+        .backgroundColor('#111')
+        .graphData(graphData)
+        .nodeId('id')
+        .nodeVal('val')
+        .nodeLabel('name')
+        .nodeColor('color')
+        .nodeResolution(8)
+        .linkWidth(0.5)
+        .linkOpacity(0.6)
+        .linkDirectionalParticles(2)
+        .linkDirectionalParticleWidth(1.5)
+        .linkDirectionalParticleSpeed(0.003)
+        .onNodeClick(node => {
+          // Display node info
+          const infoPanel = document.getElementById('node-info');
+          infoPanel.innerHTML = `
+            <h4>${node.name}</h4>
+            <p>
+              Type: ${node.group || 'Unknown'}<br>
+              ${node.path ? `Path: ${node.path}` : ''}
+            </p>
+          `;
+          
+          // Highlight connected links
+          graphData.links.forEach(link => {
+            if ((link.source.id === node.id || link.target.id === node.id) || 
+                (link.source === node.id || link.target === node.id)) {
+              link.__highlighted = true;
+            } else {
+              link.__highlighted = false;
+            }
+          });
+          
+          Graph.linkWidth(link => link.__highlighted ? 2 : 0.5)
+               .linkColor(link => link.__highlighted ? '#FFFFFF' : '#666666')
+               .nodeRelSize(8);
+        });
+      
+      // Add to DOM
+      Graph(document.getElementById('graph-container'));
+      
+      // Apply initial layout
+      applyLayout(currentLayout);
+      
+      // Event Listeners
+      document.getElementById('toggle-layout').addEventListener('click', () => {
+        currentLayout = currentLayout === 'force' 
+          ? 'radial' 
+          : currentLayout === 'radial' 
+            ? 'hierarchical' 
+            : 'force';
+        
+        applyLayout(currentLayout);
+      });
+      
+      document.getElementById('toggle-labels').addEventListener('click', () => {
+        showLabels = !showLabels;
+        
+        if (showLabels) {
+          Graph.nodeThreeObject(null)
+               .nodeLabel('name');
+        } else {
+          Graph.nodeLabel(null)
+               .nodeThreeObject(node => {
+                 // Return basic sphere
+                 return undefined;
+               });
+        }
+      });
+      
+      document.getElementById('center-graph').addEventListener('click', () => {
+        Graph.zoomToFit(1000, 50);
+      });
+      
+      // Helper function to apply different layouts
+      function applyLayout(layout) {
+        Graph.cooldownTime(10000);
+        
+        switch(layout) {
+          case 'force':
+            Graph.d3Force('link')
+                 .distance(link => 30);
+            Graph.d3Force('charge')
+                 .strength(-120);
+            break;
+          
+          case 'radial':
+            if (typeof d3 !== 'undefined' && typeof d3.forceRadial === 'function') {
+              Graph.d3Force('radial', d3.forceRadial()
+                .radius(node => {
+                  // Group nodes by type
+                  if (node.group === 'root') return 0;
+                  if (node.group === 'directory') return 100;
+                  return 200;
+                })
+                .strength(1)
+              );
+            } else {
+              console.warn('d3.forceRadial not available, falling back to force layout');
+              Graph.d3Force('link')
+                   .distance(link => 30);
+              Graph.d3Force('charge')
+                   .strength(-120);
+            }
+            break;
+          
+          case 'hierarchical':
+            // Position nodes in a tree layout
+            const rootNode = graphData.nodes.find(node => node.id === 'root');
+            if (rootNode) {
+              positionNodesHierarchically(rootNode, graphData.links);
+            }
+            break;
+        }
+        
+        // Update info
+        document.querySelector('.info-panel h3').textContent = 
+          'Layout: ' + layout.charAt(0).toUpperCase() + layout.slice(1);
+      }
+      
+      // Helper for hierarchical layout
+      function positionNodesHierarchically(rootNode, links) {
+        // Reset positions
+        graphData.nodes.forEach(node => {
+          node.fx = null;
+          node.fy = null;
+          node.fz = null;
+        });
+        
+        // Set root position
+        rootNode.fx = 0;
+        rootNode.fy = 0;
+        rootNode.fz = 0;
+        
+        // Simple BFS to position nodes
+        const levels = {};
+        const queue = [rootNode.id];
+        let currentLevel = 0;
+        levels[rootNode.id] = 0;
+        
+        while (queue.length > 0) {
+          const levelSize = queue.length;
+          const nodesInCurrentLevel = [];
+          
+          for (let i = 0; i < levelSize; i++) {
+            const nodeId = queue.shift();
+            const node = graphData.nodes.find(n => n.id === nodeId);
+            if (!node) continue;
+            
+            nodesInCurrentLevel.push(node);
+            
+            // Find children
+            links.forEach(link => {
+              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+              
+              if (sourceId === nodeId && !levels.hasOwnProperty(targetId)) {
+                queue.push(targetId);
+                levels[targetId] = currentLevel + 1;
+              }
+            });
+          }
+          
+          // Position nodes in current level in a circle
+          const radius = 100 * (currentLevel + 1);
+          const angleStep = (2 * Math.PI) / nodesInCurrentLevel.length;
+          
+          nodesInCurrentLevel.forEach((node, idx) => {
+            const angle = idx * angleStep;
+            node.fx = radius * Math.cos(angle);
+            node.fy = radius * Math.sin(angle);
+            node.fz = -currentLevel * 100; // Negative to extend forward from camera
+          });
+          
+          currentLevel++;
+        }
+        
+        Graph.numDimensions(3) // Set to 3D
+             .forceEngine('d3');
+      }
+      
+      // Set initial zoom
+      setTimeout(() => {
+        Graph.zoomToFit(1000, 50);
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
