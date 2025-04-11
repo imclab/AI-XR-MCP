@@ -1,6 +1,6 @@
-# MCP Server Template
+# AI-XR-MCP Server
 
-A template for creating Model Context Protocol (MCP) servers in TypeScript. This template provides a solid foundation for building MCP-compatible servers with proper tooling, type safety, and best practices.
+A template for creating Model Context Protocol (MCP) servers in TypeScript with a focus on WebGL, Three.js, Unity, Unreal & related AI tools. This template provides a solid foundation for building MCP-compatible servers with proper tooling, type safety, and best practices.
 
 ## Features
 
@@ -11,6 +11,7 @@ A template for creating Model Context Protocol (MCP) servers in TypeScript. This
 - 🧪 Vitest testing framework
 - 📝 Type definitions
 - 🔌 MCP SDK integration
+- WebGL magic...
 
 ## Getting Started
 
