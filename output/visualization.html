@@ -4,19 +4,28 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D Graph Visualization - AI-XR-MCP</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       margin: 0;
       padding: 0;
       font-family: Arial, sans-serif;
       overflow: hidden;
+      display: flex;
+    }
+    #file-explorer {
+      width: 250px;
+      height: 100vh;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      overflow-y: auto;
+      border-right: 1px solid #333;
+      padding: 10px 0;
+      flex-shrink: 0;
     }
     #graph-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      flex-grow: 1;
+      height: 100vh;
       background: #111;
     }
     .info-panel {
@@ -29,15 +38,76 @@
       border-radius: 4px;
       font-size: 14px;
       max-width: 300px;
+      z-index: 1000;
     }
     .controls {
       position: absolute;
       bottom: 10px;
-      left: 10px;
+      left: 260px;
       color: white;
       background: rgba(0, 0, 0, 0.7);
       padding: 10px;
       border-radius: 4px;
+      z-index: 1000;
+    }
+    .folder {
+      margin-left: 15px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .folder-name {
+      padding: 3px;
+      display: flex;
+      align-items: center;
+    }
+    .folder-name:hover {
+      background-color: #2a2d2e;
+    }
+    .folder-contents {
+      margin-left: 15px;
+      display: none;
+    }
+    .folder.expanded > .folder-contents {
+      display: block;
+    }
+    .file {
+      padding: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+    .file:hover {
+      background-color: #2a2d2e;
+    }
+    .icon {
+      margin-right: 5px;
+      width: 16px;
+      text-align: center;
+    }
+    .node-link {
+      color: #3794ff;
+      text-decoration: none;
+    }
+    .node-link:hover {
+      text-decoration: underline;
+    }
+    button {
+      background: #333;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      margin-right: 5px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #444;
+    }
+    .file-icon {
+      width: 16px;
+      height: 16px;
+      margin-right: 5px;
+      display: inline-block;
     }
   </style>
   <script src="https://unpkg.com/three"></script>
@@ -45,6 +115,7 @@
   <script src="https://unpkg.com/3d-force-graph"></script>
 </head>
 <body>
+  <div id="file-explorer"></div>
   <div id="graph-container"></div>
   <div class="info-panel">
     <h3>AI-XR-MCP Repository Visualization</h3>
@@ -63,14 +134,37 @@
   </div>
 
   <script>
+    // File icon mapping based on extensions
+    const fileIconMap = {
+      '.js': { icon: 'fab fa-js', color: '#F9E79F' },
+      '.ts': { icon: 'fab fa-js', color: '#3178C6' },
+      '.json': { icon: 'fas fa-code', color: '#F1948A' },
+      '.md': { icon: 'fab fa-markdown', color: '#D2B4DE' },
+      '.txt': { icon: 'fas fa-file-alt', color: '#D2B4DE' },
+      '.html': { icon: 'fab fa-html5', color: '#FF9900' },
+      '.css': { icon: 'fab fa-css3', color: '#85C1E9' },
+      '.py': { icon: 'fab fa-python', color: '#3572A5' },
+      '.jpg': { icon: 'fas fa-image', color: '#7DCEA0' },
+      '.png': { icon: 'fas fa-image', color: '#7DCEA0' },
+      '.svg': { icon: 'fas fa-image', color: '#7DCEA0' },
+      '.gitignore': { icon: 'fab fa-git-alt', color: '#F05032' },
+      'folder': { icon: 'fas fa-folder', color: '#4CAF50' },
+      'default': { icon: 'fas fa-file', color: '#AAB7B8' }
+    };
+
+    // Get file icon for a given filename
+    function getFileIcon(filename) {
+      const ext = '.' + filename.split('.').pop();
+      if (filename === '.gitignore') return fileIconMap['.gitignore'];
+      return fileIconMap[ext] || fileIconMap['default'];
+    }
+
     const getGraph = async () => {
       try {
-        const currentDirectory = window.location.pathname.split('/').slice(0, -2).join('/');
-        
         // Sample data structure for the repository
         const graphData = {
           nodes: [
-            { id: 'root', name: 'AI-XR-MCP', val: 7, group: 'repo', color: '#61DAFB' },
+            { id: 'root', name: 'AI-XR-MCP', val: 7, group: 'repo', color: '#61DAFB', path: '/' },
             { id: 'src', name: 'src', val: 3, group: 'directory', color: '#4CAF50', path: '/src' },
             { id: 'configs', name: 'configs', val: 3, group: 'directory', color: '#4CAF50', path: '/configs' },
             { id: 'shortcuts', name: 'shortcuts', val: 3, group: 'directory', color: '#4CAF50', path: '/shortcuts' },
@@ -165,51 +259,241 @@
         return { nodes: [], links: [] };
       }
     };
+
+    // Build file explorer
+    function buildFileExplorer(graphData) {
+      const fileExplorer = document.getElementById('file-explorer');
+      
+      // Process nodes into a tree structure
+      const tree = {
+        name: 'AI-XR-MCP',
+        path: '/',
+        id: 'root',
+        type: 'directory',
+        children: []
+      };
+      
+      // Helper function to add a node to the tree
+      function addToTree(node) {
+        if (node.id === 'root') return; // Skip root node
+        
+        const path = node.path.substring(1); // Remove leading slash
+        const parts = path.split('/');
+        
+        let currentNode = tree;
+        let currentPath = '';
+        
+        // Navigate to the correct parent folder
+        for (let i = 0; i < parts.length - 1; i++) {
+          const part = parts[i];
+          currentPath += '/' + part;
+          
+          let found = false;
+          for (let child of currentNode.children) {
+            if (child.type === 'directory' && child.name === part) {
+              currentNode = child;
+              found = true;
+              break;
+            }
+          }
+          
+          if (!found) {
+            const newNode = {
+              name: part,
+              path: currentPath,
+              type: 'directory',
+              children: []
+            };
+            currentNode.children.push(newNode);
+            currentNode = newNode;
+          }
+        }
+        
+        // Add the actual node
+        const name = parts[parts.length - 1];
+        const isDirectory = node.group === 'directory';
+        const newNode = {
+          name,
+          path: node.path,
+          id: node.id,
+          type: isDirectory ? 'directory' : 'file',
+          children: isDirectory ? [] : undefined
+        };
+        
+        currentNode.children.push(newNode);
+      }
+      
+      // Add all nodes to the tree
+      graphData.nodes.forEach(addToTree);
+      
+      // Sort directories first, then files
+      function sortTree(node) {
+        if (node.children) {
+          node.children.sort((a, b) => {
+            if (a.type === 'directory' && b.type !== 'directory') return -1;
+            if (a.type !== 'directory' && b.type === 'directory') return 1;
+            return a.name.localeCompare(b.name);
+          });
+          
+          node.children.forEach(sortTree);
+        }
+      }
+      
+      sortTree(tree);
+      
+      // Render the tree
+      function renderNode(node) {
+        if (node.type === 'directory') {
+          const folderDiv = document.createElement('div');
+          folderDiv.className = 'folder';
+          folderDiv.dataset.path = node.path;
+          
+          const folderNameDiv = document.createElement('div');
+          folderNameDiv.className = 'folder-name';
+          
+          const icon = document.createElement('i');
+          icon.className = 'fas fa-folder icon';
+          icon.style.color = '#4CAF50';
+          
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = node.name;
+          
+          folderNameDiv.appendChild(icon);
+          folderNameDiv.appendChild(nameSpan);
+          folderDiv.appendChild(folderNameDiv);
+          
+          const contentsDiv = document.createElement('div');
+          contentsDiv.className = 'folder-contents';
+          
+          if (node.children) {
+            node.children.forEach(child => {
+              contentsDiv.appendChild(renderNode(child));
+            });
+          }
+          
+          folderDiv.appendChild(contentsDiv);
+          
+          // Expand/collapse functionality
+          folderNameDiv.addEventListener('click', () => {
+            folderDiv.classList.toggle('expanded');
+            icon.className = folderDiv.classList.contains('expanded') ? 
+              'fas fa-folder-open icon' : 'fas fa-folder icon';
+          });
+          
+          // Expand root folder by default
+          if (node.path === '/') {
+            folderDiv.classList.add('expanded');
+            icon.className = 'fas fa-folder-open icon';
+          }
+          
+          return folderDiv;
+        } else {
+          const fileDiv = document.createElement('div');
+          fileDiv.className = 'file';
+          fileDiv.dataset.id = node.id;
+          
+          const fileInfo = getFileIcon(node.name);
+          const icon = document.createElement('i');
+          icon.className = `${fileInfo.icon} icon`;
+          icon.style.color = fileInfo.color;
+          
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = node.name;
+          
+          fileDiv.appendChild(icon);
+          fileDiv.appendChild(nameSpan);
+          
+          // Highlight node in 3D view when clicked
+          fileDiv.addEventListener('click', () => {
+            const nodeInGraph = graphData.nodes.find(n => n.id === node.id);
+            if (nodeInGraph) {
+              highlightNode(nodeInGraph);
+            }
+          });
+          
+          return fileDiv;
+        }
+      }
+      
+      // Render the tree starting from the root
+      fileExplorer.appendChild(renderNode(tree));
+    }
     
     // Setup visualization
     let showLabels = true;
     let currentLayout = 'force';
+    let Graph;
     
     // Initialize 3D force graph when data is loaded
     getGraph().then(graphData => {
-      const Graph = ForceGraph3D()
+      // Build the file explorer
+      buildFileExplorer(graphData);
+      
+      // Create 3D graph
+      Graph = ForceGraph3D()
         .backgroundColor('#111')
         .graphData(graphData)
         .nodeId('id')
         .nodeVal('val')
         .nodeLabel('name')
         .nodeColor('color')
+        .nodeThreeObject(node => {
+          // Create a group to hold the node objects
+          const group = new THREE.Group();
+          
+          // Create the sphere for the node
+          const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(node.val),
+            new THREE.MeshLambertMaterial({ color: node.color, transparent: true, opacity: 0.8 })
+          );
+          group.add(sphere);
+          
+          // Add icon based on node type
+          if (node.group === 'directory') {
+            // Use folder icon
+            const sprite = new SpriteText('📁');
+            sprite.material.depthWrite = false;
+            sprite.color = '#FFFFFF';
+            sprite.textHeight = node.val * 1.5;
+            sprite.position.y = node.val * 1.2;
+            group.add(sprite);
+          } else if (node.id !== 'root') {
+            // Get file type icon
+            let iconText = '📄';
+            
+            if (node.name.endsWith('.ts') || node.name.endsWith('.js')) {
+              iconText = '🟨';
+            } else if (node.name.endsWith('.json')) {
+              iconText = '🔄';
+            } else if (node.name.endsWith('.md')) {
+              iconText = '📝';
+            }
+            
+            const sprite = new SpriteText(iconText);
+            sprite.material.depthWrite = false;
+            sprite.color = '#FFFFFF';
+            sprite.textHeight = node.val * 1.5;
+            sprite.position.y = node.val * 1.2;
+            group.add(sprite);
+          } else {
+            // Root node
+            const sprite = new SpriteText('🏠');
+            sprite.material.depthWrite = false;
+            sprite.color = '#FFFFFF';
+            sprite.textHeight = node.val * 1.5;
+            sprite.position.y = node.val * 1.2;
+            group.add(sprite);
+          }
+          
+          return group;
+        })
         .nodeResolution(8)
         .linkWidth(0.5)
         .linkOpacity(0.6)
         .linkDirectionalParticles(2)
         .linkDirectionalParticleWidth(1.5)
         .linkDirectionalParticleSpeed(0.003)
-        .onNodeClick(node => {
-          // Display node info
-          const infoPanel = document.getElementById('node-info');
-          infoPanel.innerHTML = `
-            <h4>${node.name}</h4>
-            <p>
-              Type: ${node.group || 'Unknown'}<br>
-              ${node.path ? `Path: ${node.path}` : ''}
-            </p>
-          `;
-          
-          // Highlight connected links
-          graphData.links.forEach(link => {
-            if ((link.source.id === node.id || link.target.id === node.id) || 
-                (link.source === node.id || link.target === node.id)) {
-              link.__highlighted = true;
-            } else {
-              link.__highlighted = false;
-            }
-          });
-          
-          Graph.linkWidth(link => link.__highlighted ? 2 : 0.5)
-               .linkColor(link => link.__highlighted ? '#FFFFFF' : '#666666')
-               .nodeRelSize(8);
-        });
+        .onNodeClick(highlightNode);
       
       // Add to DOM
       Graph(document.getElementById('graph-container'));
@@ -235,10 +519,51 @@
           Graph.nodeThreeObject(null)
                .nodeLabel('name');
         } else {
+          // Restore custom node objects
           Graph.nodeLabel(null)
                .nodeThreeObject(node => {
-                 // Return basic sphere
-                 return undefined;
+                 const group = new THREE.Group();
+                 
+                 const sphere = new THREE.Mesh(
+                   new THREE.SphereGeometry(node.val),
+                   new THREE.MeshLambertMaterial({ color: node.color, transparent: true, opacity: 0.8 })
+                 );
+                 group.add(sphere);
+                 
+                 if (node.group === 'directory') {
+                   const sprite = new SpriteText('📁');
+                   sprite.material.depthWrite = false;
+                   sprite.color = '#FFFFFF';
+                   sprite.textHeight = node.val * 1.5;
+                   sprite.position.y = node.val * 1.2;
+                   group.add(sprite);
+                 } else if (node.id !== 'root') {
+                   let iconText = '📄';
+                   
+                   if (node.name.endsWith('.ts') || node.name.endsWith('.js')) {
+                     iconText = '🟨';
+                   } else if (node.name.endsWith('.json')) {
+                     iconText = '🔄';
+                   } else if (node.name.endsWith('.md')) {
+                     iconText = '📝';
+                   }
+                   
+                   const sprite = new SpriteText(iconText);
+                   sprite.material.depthWrite = false;
+                   sprite.color = '#FFFFFF';
+                   sprite.textHeight = node.val * 1.5;
+                   sprite.position.y = node.val * 1.2;
+                   group.add(sprite);
+                 } else {
+                   const sprite = new SpriteText('🏠');
+                   sprite.material.depthWrite = false;
+                   sprite.color = '#FFFFFF';
+                   sprite.textHeight = node.val * 1.5;
+                   sprite.position.y = node.val * 1.2;
+                   group.add(sprite);
+                 }
+                 
+                 return group;
                });
         }
       });
@@ -247,118 +572,222 @@
         Graph.zoomToFit(1000, 50);
       });
       
-      // Helper function to apply different layouts
-      function applyLayout(layout) {
-        Graph.cooldownTime(10000);
-        
-        switch(layout) {
-          case 'force':
-            Graph.d3Force('link')
-                 .distance(link => 30);
-            Graph.d3Force('charge')
-                 .strength(-120);
-            break;
-          
-          case 'radial':
-            if (typeof d3 !== 'undefined' && typeof d3.forceRadial === 'function') {
-              Graph.d3Force('radial', d3.forceRadial()
-                .radius(node => {
-                  // Group nodes by type
-                  if (node.group === 'root') return 0;
-                  if (node.group === 'directory') return 100;
-                  return 200;
-                })
-                .strength(1)
-              );
-            } else {
-              console.warn('d3.forceRadial not available, falling back to force layout');
-              Graph.d3Force('link')
-                   .distance(link => 30);
-              Graph.d3Force('charge')
-                   .strength(-120);
-            }
-            break;
-          
-          case 'hierarchical':
-            // Position nodes in a tree layout
-            const rootNode = graphData.nodes.find(node => node.id === 'root');
-            if (rootNode) {
-              positionNodesHierarchically(rootNode, graphData.links);
-            }
-            break;
-        }
-        
-        // Update info
-        document.querySelector('.info-panel h3').textContent = 
-          'Layout: ' + layout.charAt(0).toUpperCase() + layout.slice(1);
-      }
-      
-      // Helper for hierarchical layout
-      function positionNodesHierarchically(rootNode, links) {
-        // Reset positions
-        graphData.nodes.forEach(node => {
-          node.fx = null;
-          node.fy = null;
-          node.fz = null;
-        });
-        
-        // Set root position
-        rootNode.fx = 0;
-        rootNode.fy = 0;
-        rootNode.fz = 0;
-        
-        // Simple BFS to position nodes
-        const levels = {};
-        const queue = [rootNode.id];
-        let currentLevel = 0;
-        levels[rootNode.id] = 0;
-        
-        while (queue.length > 0) {
-          const levelSize = queue.length;
-          const nodesInCurrentLevel = [];
-          
-          for (let i = 0; i < levelSize; i++) {
-            const nodeId = queue.shift();
-            const node = graphData.nodes.find(n => n.id === nodeId);
-            if (!node) continue;
-            
-            nodesInCurrentLevel.push(node);
-            
-            // Find children
-            links.forEach(link => {
-              const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-              const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-              
-              if (sourceId === nodeId && !levels.hasOwnProperty(targetId)) {
-                queue.push(targetId);
-                levels[targetId] = currentLevel + 1;
-              }
-            });
-          }
-          
-          // Position nodes in current level in a circle
-          const radius = 100 * (currentLevel + 1);
-          const angleStep = (2 * Math.PI) / nodesInCurrentLevel.length;
-          
-          nodesInCurrentLevel.forEach((node, idx) => {
-            const angle = idx * angleStep;
-            node.fx = radius * Math.cos(angle);
-            node.fy = radius * Math.sin(angle);
-            node.fz = -currentLevel * 100; // Negative to extend forward from camera
-          });
-          
-          currentLevel++;
-        }
-        
-        Graph.numDimensions(3) // Set to 3D
-             .forceEngine('d3');
-      }
-      
       // Set initial zoom
       setTimeout(() => {
         Graph.zoomToFit(1000, 50);
       }, 1000);
     });
+    
+    // Helper function to highlight a node
+    function highlightNode(node) {
+      // Update info panel
+      const infoPanel = document.getElementById('node-info');
+      const repoBaseUrl = 'https://github.com/jamestunick/AI-XR-MCP/blob/main';
+      const fileUrl = node.path === '/' ? repoBaseUrl : `${repoBaseUrl}${node.path}`;
+      
+      infoPanel.innerHTML = `
+        <h4>${node.name}</h4>
+        <p>
+          Type: ${node.group || 'Unknown'}<br>
+          Path: ${node.path}<br>
+          ${node.id !== 'root' ? `<a href="${fileUrl}" class="node-link" target="_blank">View on GitHub</a>` : ''}
+        </p>
+      `;
+      
+      // Expand the corresponding folder in the file explorer
+      if (node.id !== 'root') {
+        const pathParts = node.path.split('/').filter(p => p);
+        let currentPath = '';
+        
+        // Expand each parent folder
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          currentPath += '/' + pathParts[i];
+          const folderElement = document.querySelector(`.folder[data-path="${currentPath}"]`);
+          if (folderElement && !folderElement.classList.contains('expanded')) {
+            folderElement.classList.add('expanded');
+            const icon = folderElement.querySelector('.folder-name i');
+            if (icon) {
+              icon.className = 'fas fa-folder-open icon';
+            }
+          }
+        }
+        
+        // Highlight the file in the explorer
+        const fileElements = document.querySelectorAll('.file');
+        fileElements.forEach(el => {
+          el.style.backgroundColor = '';
+          if (el.dataset.id === node.id) {
+            el.style.backgroundColor = '#264F78';
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      }
+      
+      // Get access to the graph data
+      const graphData = Graph.graphData();
+      
+      // Reset all nodes and links
+      graphData.nodes.forEach(n => {
+        n.__highlighted = false;
+        n.__previouslyHighlighted = false;
+      });
+      
+      graphData.links.forEach(link => {
+        link.__highlighted = false;
+      });
+      
+      // Highlight selected node
+      node.__highlighted = true;
+      
+      // Highlight connected links and nodes
+      graphData.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        
+        if (sourceId === node.id || targetId === node.id) {
+          link.__highlighted = true;
+          
+          // Highlight connected node
+          const connectedNodeId = sourceId === node.id ? targetId : sourceId;
+          const connectedNode = graphData.nodes.find(n => n.id === connectedNodeId);
+          if (connectedNode) {
+            connectedNode.__previouslyHighlighted = true;
+          }
+        }
+      });
+      
+      // Update node appearances
+      Graph
+        .nodeColor(n => n.__highlighted ? '#FFFFFF' : n.__previouslyHighlighted ? '#AAAAAA' : n.color)
+        .linkWidth(link => link.__highlighted ? 2 : 0.5)
+        .linkColor(link => link.__highlighted ? '#FFFFFF' : '#666666')
+        .linkDirectionalParticles(link => link.__highlighted ? 4 : 0);
+      
+      // Bring node to focus
+      if (node) {
+        const distance = 40;
+        const distRatio = 1 + distance/Math.hypot(node.x, node.y, node.z);
+        Graph.cameraPosition(
+          { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio },
+          node,
+          1000
+        );
+      }
+    }
+    
+    // Helper function to apply different layouts
+    function applyLayout(layout) {
+      if (!Graph) return;
+      
+      Graph.cooldownTime(10000);
+      
+      switch(layout) {
+        case 'force':
+          Graph.d3Force('link')
+               .distance(link => 30);
+          Graph.d3Force('charge')
+               .strength(-120);
+          break;
+        
+        case 'radial':
+          if (typeof d3 !== 'undefined' && typeof d3.forceRadial === 'function') {
+            Graph.d3Force('radial', d3.forceRadial()
+              .radius(node => {
+                // Group nodes by type
+                if (node.group === 'root') return 0;
+                if (node.group === 'directory') return 100;
+                return 200;
+              })
+              .strength(1)
+            );
+          } else {
+            console.warn('d3.forceRadial not available, falling back to force layout');
+            Graph.d3Force('link')
+                 .distance(link => 30);
+            Graph.d3Force('charge')
+                 .strength(-120);
+          }
+          break;
+        
+        case 'hierarchical':
+          // Position nodes in a tree layout
+          const graphData = Graph.graphData();
+          const rootNode = graphData.nodes.find(node => node.id === 'root');
+          if (rootNode) {
+            positionNodesHierarchically(rootNode, graphData.links);
+          }
+          break;
+      }
+      
+      // Update info
+      document.querySelector('.info-panel h3').textContent = 
+        'Layout: ' + layout.charAt(0).toUpperCase() + layout.slice(1);
+    }
+    
+    // Helper for hierarchical layout
+    function positionNodesHierarchically(rootNode, links) {
+      if (!Graph) return;
+      
+      const graphData = Graph.graphData();
+      
+      // Reset positions
+      graphData.nodes.forEach(node => {
+        node.fx = null;
+        node.fy = null;
+        node.fz = null;
+      });
+      
+      // Set root position
+      rootNode.fx = 0;
+      rootNode.fy = 0;
+      rootNode.fz = 0;
+      
+      // Simple BFS to position nodes
+      const levels = {};
+      const queue = [rootNode.id];
+      let currentLevel = 0;
+      levels[rootNode.id] = 0;
+      
+      while (queue.length > 0) {
+        const levelSize = queue.length;
+        const nodesInCurrentLevel = [];
+        
+        for (let i = 0; i < levelSize; i++) {
+          const nodeId = queue.shift();
+          const node = graphData.nodes.find(n => n.id === nodeId);
+          if (!node) continue;
+          
+          nodesInCurrentLevel.push(node);
+          
+          // Find children
+          links.forEach(link => {
+            const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+            const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+            
+            if (sourceId === nodeId && !levels.hasOwnProperty(targetId)) {
+              queue.push(targetId);
+              levels[targetId] = currentLevel + 1;
+            }
+          });
+        }
+        
+        // Position nodes in current level in a circle
+        const radius = 100 * (currentLevel + 1);
+        const angleStep = (2 * Math.PI) / nodesInCurrentLevel.length;
+        
+        nodesInCurrentLevel.forEach((node, idx) => {
+          const angle = idx * angleStep;
+          node.fx = radius * Math.cos(angle);
+          node.fy = radius * Math.sin(angle);
+          node.fz = -currentLevel * 100; // Negative to extend forward from camera
+        });
+        
+        currentLevel++;
+      }
+      
+      Graph.numDimensions(3) // Set to 3D
+           .forceEngine('d3');
+    }
   </script>
 </body>
 </html>
